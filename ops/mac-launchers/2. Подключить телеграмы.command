@@ -20,6 +20,10 @@
 set -u
 
 REMOTE="prodai-vps"
+# Связь рвалась ровно в те минуты, когда скрипт ждал ввода: пока человек ищет
+# api_hash, по каналу не идёт ни байта, и он отваливается. Клиент теперь сам
+# шлёт признак жизни каждые 20 секунд и терпит до двух минут молчания.
+SSHOPTS="-o ServerAliveInterval=20 -o ServerAliveCountMax=6 -o TCPKeepAlive=yes"
 PROJECT="/home/oleg/prodai"
 APP="/opt/prodai-control/app"
 VPY="/opt/prodai-control/venv/bin/python"
@@ -36,11 +40,29 @@ say() {
 }
 hr() { say "----------------------------------------------------------"; }
 
+# Сервер печатает api_hash открытым текстом — так устроен его скрипт, — а
+# script(1) пишет сеанс целиком. Значит, протокол может содержать секрет, и
+# обещать обратное нельзя: вычищаем его перед тем, как называть безопасным.
+scrub_log() {
+  [ -n "$LOGFILE" ] || return 0
+  [ -f "$LOGFILE" ] || return 0
+  tmp="$LOGFILE.tmp.$$"
+  if LC_ALL=C sed -E \
+       -e 's/[0-9a-fA-F]{32,}/<СКРЫТО>/g' \
+       -e 's/[0-9]{6,12}:[A-Za-z0-9_-]{30,}/<СКРЫТО>/g' \
+       "$LOGFILE" > "$tmp" 2>/dev/null; then
+    mv "$tmp" "$LOGFILE"
+  fi
+  rm -f "$tmp" 2>/dev/null
+  return 0
+}
+
 pause_exit() {
+  scrub_log
   say ""
   if [ -n "$LOGFILE" ]; then
     say "Протокол: $LOGFILE"
-    say "Секретов в нём нет — можно прислать в чат."
+    say "api_hash в нём заглушён — прислать в чат можно."
   fi
   say ""
   read -n 1 -s -r -p "Нажмите любую клавишу, чтобы закрыть окно"
@@ -66,9 +88,9 @@ remote_tty() {
   # На иных системах script разбирает аргументы иначе, поэтому там идём
   # напрямую: протокол этой части потеряем, но интерактивность сохраним.
   if [ -n "$LOGFILE" ] && [ "$(uname -s)" = "Darwin" ] && command -v script >/dev/null 2>&1; then
-    script -q -a "$LOGFILE" ssh -t "$REMOTE" "$1"
+    script -q -a "$LOGFILE" ssh $SSHOPTS -t "$REMOTE" "$1"
   else
-    ssh -t "$REMOTE" "$1"
+    ssh $SSHOPTS -t "$REMOTE" "$1"
   fi
 }
 
@@ -83,11 +105,11 @@ if ! command -v ssh >/dev/null 2>&1; then
 fi
 
 say "Шаг 1. Проверяю связь с сервером"
-if ! ssh -o BatchMode=yes -o ConnectTimeout=20 "$REMOTE" 'echo OK' >/dev/null 2>&1; then
+if ! ssh $SSHOPTS -o BatchMode=yes -o ConnectTimeout=20 "$REMOTE" 'echo OK' >/dev/null 2>&1; then
   say "  связи нет."
   say ""
   say "  Подробности:"
-  ssh -o BatchMode=yes -o ConnectTimeout=20 "$REMOTE" 'echo OK' 2>&1 | sed 's/^/    /' | tee -a "$LOGFILE" 2>/dev/null
+  ssh $SSHOPTS -o BatchMode=yes -o ConnectTimeout=20 "$REMOTE" 'echo OK' 2>&1 | sed 's/^/    /' | tee -a "$LOGFILE" 2>/dev/null
   say ""
   say "  Если ключ не принят — запустите файл «1. ... SSH.command»."
   pause_exit 1
@@ -101,7 +123,7 @@ say "Шаг 2. Что подключено сейчас"
 say "  (сервер спросит пароль sudo — состояние лежит в закрытом каталоге)"
 say ""
 
-STATE="$(ssh -t "$REMOTE" 'sudo bash -c '"'"'
+STATE="$(ssh $SSHOPTS -t "$REMOTE" 'sudo bash -c '"'"'
 for pair in "telegram-user-secret.json|рабочий  @proday_za_menya" "telegram-owner-secret.json|личный   @aelart"; do
   f="/var/lib/prodai-control/${pair%%|*}"
   label="${pair##*|}"
@@ -117,10 +139,14 @@ else
   echo "  управляющий бот: НЕ настроен"
 fi
 echo "  сервис prodai-control: $(systemctl is-active prodai-control.service)"
+command -v tmux >/dev/null 2>&1 && echo "  tmux: есть" || echo "  tmux: нет"
 '"'"'' 2>&1 | tr -d '\r' | grep -vE '^\[sudo|^Connection to')"
 
 say "$STATE"
 say ""
+
+HAS_TMUX=0
+printf '%s' "$STATE" | grep -q 'tmux: есть' && HAS_TMUX=1
 
 BOTH_PRESENT=0
 [ "$(printf '%s' "$STATE" | grep -c 'ПОДКЛЮЧЁН')" = "2" ] && BOTH_PRESENT=1
@@ -187,6 +213,31 @@ enroll_one() {
   say "Подключение: $human"
   hr
   say ""
+  say "СНАЧАЛА ПРИГОТОВЬТЕ ВСЁ, не запуская вход:"
+  say ""
+  say "  1. Откройте https://my.telegram.org и войдите номером ИМЕННО"
+  say "     этого аккаунта. Раздел API development tools — там api_hash."
+  say "     Скопируйте его в буфер обмена прямо сейчас."
+  say "  2. Возьмите в руки телефон с Telegram — туда придёт код."
+  say ""
+  say "Почему это важно. В прошлый раз связь рвалась именно тогда, когда"
+  say "скрипт ждал, пока вы ищете значение: молчащий канал отваливается."
+  say "Теперь программа сама поддерживает связь, но чем меньше пауза,"
+  say "тем надёжнее."
+  say ""
+  say "ДВА ПРАВИЛА ВВОДА, из-за них прошлый раз и сорвался:"
+  say ""
+  say "  - НЕ нажимайте Enter «просто так», чтобы проверить отклик."
+  say "    Пустой ответ на api_hash обрывает вход с сообщением"
+  say "    «Пустое значение», и вставленное следом уходит мимо."
+  say "  - Вставили значение — Enter ОДИН раз. Больше ничего не нажимайте."
+  say ""
+  say "И имейте в виду: api_hash сервер печатает на экран открытым"
+  say "текстом, так устроен его скрипт. Не снимайте экран и не"
+  say "пересылайте кадр. В протоколе на Рабочем столе я его заглушу."
+  say ""
+  hr
+  say ""
   say "Вопросы пойдут ПО-АНГЛИЙСКИ. Вот что отвечать на каждый —"
   say "сверяйтесь с этим списком, отвечайте по порядку."
   say ""
@@ -220,7 +271,32 @@ enroll_one() {
     return 1
   fi
   say ""
-  remote_tty "sudo env PYTHONPATH=$APP $VPY -u -m prodai_control.enroll_telegram_user --network $net"
+  # Вход выполняется через файл на сервере, а не длинной командой: так проще
+  # и надёжнее с кавычками. Если есть tmux, вход идёт внутри него — тогда
+  # обрыв связи не убивает процесс, и повторный запуск этого же пункта
+  # возвращает вас в тот же незаконченный вход, а не начинает всё сначала.
+  ENROLL_BODY="set -u
+sudo env PYTHONPATH=$APP $VPY -u -m prodai_control.enroll_telegram_user --network $net
+rc=\$?
+echo
+echo '--------------------------------------------------'
+echo \"Подключение завершено, код возврата \$rc\"
+echo 'Нажмите Enter, чтобы вернуться.'
+read _
+"
+  if ! printf '%s' "$ENROLL_BODY" | ssh $SSHOPTS "$REMOTE" 'umask 077; cat > "$HOME/.prodai-enroll.sh"'; then
+    say "  не удалось передать скрипт на сервер. Ничего не изменено."
+    return 1
+  fi
+
+  if [ "$HAS_TMUX" = "1" ]; then
+    say "  (вход идёт в tmux: если связь оборвётся, просто запустите"
+    say "   этот же пункт снова — продолжите с того же места)"
+    say ""
+    remote_tty "tmux new-session -A -s prodai-enroll-$net 'bash \$HOME/.prodai-enroll.sh'"
+  else
+    remote_tty "bash \$HOME/.prodai-enroll.sh"
+  fi
   say ""
 }
 
