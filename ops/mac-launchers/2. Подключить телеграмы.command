@@ -366,21 +366,42 @@ else
   say "Пара api_id/api_hash одна на все ваши аккаунты — она привязана"
   say "к учётной записи my.telegram.org, а не к номеру."
   say ""
+  if printf '%s' "$PROBE" | grep -q "telethon:  нет"; then
+    say "  ПРЕДУПРЕЖДЕНИЕ, прочтите до ввода данных."
+    say "  На сервере нет библиотеки telethon — значит, войти в аккаунт"
+    say "  прямо сейчас не получится. Реквизиты сохранятся, но вход"
+    say "  придётся делать отдельным шагом, после установки:"
+    say ""
+    say "      ssh $REMOTE"
+    say "      python3 -m pip install --user telethon"
+    say ""
+    if ! ask_yes "  Всё равно продолжить и сохранить реквизиты?"; then
+      say "  Отменено. Сервер не тронут."
+      pause_exit 0
+    fi
+    say ""
+  fi
 
   API_ID=""
   while true; do
-    read -r -p "api_id (только цифры): " API_ID
+    say "  api_id — это число, которое my.telegram.org показал в разделе App configuration."
+    read -r -p "  api_id: " API_ID
     if valid_apiid "$API_ID"; then break; fi
-    say "  ожидаются 4-12 цифр."
+    say "  Не подошло: ожидается только число, 4-12 цифр."
   done
+  say "  принято"
+  say ""
 
   API_HASH=""
   while true; do
-    read -r -s -p "api_hash (ввод скрыт, 32 символа): " API_HASH
+    say "  api_hash — строка рядом с api_id на той же странице, ровно 32 знака."
+    say "  Ввод скрыт: на экране ничего не появится, это нормально. Вставьте и нажмите Enter."
+    read -r -s -p "  api_hash: " API_HASH
     echo
     if valid_hash "$API_HASH"; then break; fi
-    say "  ожидаются 32 шестнадцатеричных символа."
+    say "  Не подошло: ожидается ровно 32 знака из цифр и букв a-f."
   done
+  say "  принято"
 
   ENV_BODY="${ENV_BODY}
 TELEGRAM_API_ID=${API_ID}
@@ -388,15 +409,26 @@ TELEGRAM_API_HASH=${API_HASH}
 "
 
   say ""
-  say "Теперь номера аккаунтов. Пустая строка — закончить."
+  say "Теперь номера ваших аккаунтов — по одному."
+  say "Ниже X означает цифру: это образец формата, а не готовый номер."
+  say "Вводите свой настоящий номер, с кодом страны и без пробелов."
   say ""
   PHONES=""
   while true; do
     PHONE=""
-    read -r -p "Номер телефона (+79991234567), Enter — закончить: " PHONE
+    N=$((COUNT + 1))
+    say "  --- аккаунт ${N} ---"
+    if [ "$COUNT" = "0" ]; then
+      say "  Формат: +7XXXXXXXXXX   (например, начинается на +7 и всего 11 цифр)"
+      read -r -p "  Номер аккаунта ${N}: " PHONE
+    else
+      say "  Введено аккаунтов: ${COUNT}. Если больше не нужно — просто нажмите Enter."
+      read -r -p "  Номер аккаунта ${N} (или Enter, чтобы закончить): " PHONE
+    fi
     [ -z "$PHONE" ] && break
     if ! valid_phone "$PHONE"; then
-      say "  ожидается номер вида +79991234567."
+      say "  Не подошло: нужен номер с кодом страны, только цифры, без пробелов и скобок."
+      say "  Длина от 7 до 15 цифр, плюс в начале допустим."
       continue
     fi
     COUNT=$((COUNT + 1))
