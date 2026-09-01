@@ -23,6 +23,14 @@ REMOTE="prodai-vps"
 # Связь рвалась ровно в те минуты, когда скрипт ждал ввода: пока человек ищет
 # api_hash, по каналу не идёт ни байта, и он отваливается. Клиент теперь сам
 # шлёт признак жизни каждые 20 секунд и терпит до двух минут молчания.
+# Номера вшиты, чтобы не набирать их каждый раз.
+phone_for() {
+  case "$1" in
+    telegram_user)  printf '%s' "+79178968483" ;;
+    telegram_owner) printf '%s' "+79655959997" ;;
+  esac
+}
+
 SSHOPTS="-o ServerAliveInterval=20 -o ServerAliveCountMax=6 -o TCPKeepAlive=yes"
 PROJECT="/home/oleg/prodai"
 APP="/opt/prodai-control/app"
@@ -219,6 +227,136 @@ canary() {
   say "В двух последних случаях аккаунт нужно переподключить — пункт 4."
 }
 
+# Драйвер входа. Работает поверх штатного модуля: api_id берёт из политики,
+# запись делает их же store_secret. Своё здесь только три вещи — номер
+# подставляется, api_hash читается СКРЫТО (штатный скрипт печатает его
+# открытым текстом), и показывается тип доставки кода, которого штатный
+# скрипт не показывает вовсе.
+ENROLL_PY=$(cat <<'ENROLL_PY_EOF'
+import sys, getpass
+sys.path.insert(0, "/opt/prodai-control/app")
+
+from prodai_control import enroll_telegram_user as E
+from telethon.sessions import StringSession
+from telethon.sync import TelegramClient
+from telethon import errors
+
+
+def main():
+    network, phone = sys.argv[1], sys.argv[2]
+    spec = E.NETWORKS[network]
+    print("=" * 62)
+    print("Подключение: " + spec["label"])
+    print("Номер:       " + phone)
+    print("=" * 62)
+    print()
+
+    api_id_raw = E.api_id_from_policy(network=network) or input("api_id: ").strip()
+    if not api_id_raw.isdigit():
+        raise SystemExit("api_id должен быть числом. Ничего не изменено.")
+    print("api_id:      " + api_id_raw)
+    print()
+    print("Вставьте api_hash с my.telegram.org и нажмите Enter ОДИН раз.")
+    print("Ввод скрыт: на экране НИЧЕГО не появится, это нормально.")
+    api_hash = getpass.getpass("api_hash: ").strip()
+    if not api_hash:
+        raise SystemExit("api_hash пустой. Ничего не изменено.")
+    print("принято, знаков: %d" % len(api_hash))
+    print()
+
+    client = TelegramClient(StringSession(), int(api_id_raw), api_hash)
+    client.connect()
+    session = None
+    try:
+        try:
+            sent = client.send_code_request(phone)
+        except errors.ApiIdInvalidError:
+            raise SystemExit(
+                "ОТКАЗ: api_id и api_hash не подходят друг к другу.\n"
+                "Возьмите api_hash на my.telegram.org, войдя номером " + phone)
+        except errors.PhoneNumberInvalidError:
+            raise SystemExit("ОТКАЗ: Telegram не принял номер " + phone)
+        except errors.FloodWaitError as exc:
+            raise SystemExit(
+                "ОТКАЗ: Telegram просит подождать %d секунд (это %d минут).\n"
+                "Причина — частые попытки входа. Обойти нельзя, только ждать."
+                % (exc.seconds, exc.seconds // 60))
+
+        kind = type(sent.type).__name__
+        nxt = getattr(sent, "next_type", None)
+        nxt = type(nxt).__name__ if nxt else "другой попытки не предусмотрено"
+
+        print("-" * 62)
+        print("ЧТО ОТВЕТИЛ TELEGRAM О ДОСТАВКЕ КОДА")
+        print("  тип: " + kind)
+        print()
+        if "App" in kind:
+            print("  Код ушёл В ПРИЛОЖЕНИЕ Telegram. SMS не будет.")
+            print("  Ищите на устройстве, где этот аккаунт ЕЩЁ НЕ разлогинен,")
+            print("  в служебном чате «Telegram» — синяя галочка, номер 777000.")
+            print("  Чат бывает в архиве или с отключёнными уведомлениями.")
+        elif "Sms" in kind:
+            print("  Код отправлен SMS-кой на " + phone)
+        elif "Call" in kind or "Missed" in kind:
+            print("  Код придёт звонком на " + phone)
+        else:
+            print("  Необычный способ доставки, сообщите мне строку выше.")
+        print()
+        print("  Если не придёт, следующей попыткой будет: " + nxt)
+        print("-" * 62)
+        print()
+
+        code = input("Код (или просто Enter, чтобы запросить SMS): ").strip()
+        if not code:
+            print()
+            print("Запрашиваю SMS...")
+            try:
+                sent = client.send_code_request(phone, force_sms=True)
+                print("Запрошено, тип: " + type(sent.type).__name__)
+            except errors.FloodWaitError as exc:
+                raise SystemExit("Telegram просит подождать %d секунд." % exc.seconds)
+            except Exception as exc:
+                raise SystemExit("SMS запросить не удалось: %s: %s"
+                                 % (type(exc).__name__, exc))
+            code = input("Код из SMS: ").strip()
+            if not code:
+                raise SystemExit("Код не введён. Ничего не изменено.")
+
+        try:
+            client.sign_in(phone=phone, code=code)
+        except errors.SessionPasswordNeededError:
+            print()
+            print("У аккаунта включена двухфакторная защита.")
+            password = getpass.getpass("Пароль от неё (ввод скрыт): ")
+            client.sign_in(password=password)
+        except errors.PhoneCodeInvalidError:
+            raise SystemExit("Код неверный. Ничего не изменено.")
+        except errors.PhoneCodeExpiredError:
+            raise SystemExit("Код просрочен. Запустите пункт заново.")
+
+        me = client.get_me()
+        who = getattr(me, "username", None) or str(getattr(me, "id", ""))
+        print()
+        print("ВХОД ВЫПОЛНЕН: @" + who)
+        if who and who.lower() not in spec["label"].lower():
+            print("ВНИМАНИЕ: ожидался " + spec["label"])
+            print("Вошли не тем аккаунтом — секрет всё равно сохраню, но проверьте.")
+        session = client.session.save()
+    finally:
+        client.disconnect()
+
+    if session:
+        E.store_secret({"api_id": api_id_raw, "api_hash": api_hash, "session": session}, network)
+        print("Сохранено штатным путём: " + str(E.secret_path(network)))
+        print("Строка сессии на экран не выводится намеренно.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+ENROLL_PY_EOF
+)
+
 enroll_one() {
   net="$1"; human="$2"
   hr
@@ -293,28 +431,21 @@ enroll_one() {
     return 1
   fi
   say ""
-  # Вход выполняется через файл на сервере, а не длинной командой: так проще
-  # и надёжнее с кавычками, чем длинная команда через несколько уровней
-  # кавычек ssh.
-  ENROLL_BODY="set -u
-sudo env PYTHONPATH=$APP $VPY -u -m prodai_control.enroll_telegram_user --network $net
-rc=\$?
-echo
-echo '--------------------------------------------------'
-echo \"Подключение завершено, код возврата \$rc\"
-echo 'Нажмите Enter, чтобы вернуться.'
-read _
-"
-  if ! printf '%s' "$ENROLL_BODY" | ssh $SSHOPTS "$REMOTE" 'umask 077; cat > "$HOME/.prodai-enroll.sh"'; then
+  # Штатный enroll_telegram_user.py спрашивает номер сам и не показывает,
+  # КУДА Telegram отправил код. Поэтому вход ведём своим драйвером: он
+  # подставляет номер, печатает тип доставки, умеет принудительно запросить
+  # SMS — а записывает результат ТЕМ ЖЕ store_secret из их модуля, так что
+  # путь записи, права и копия в Bitwarden остаются штатными.
+  PHONE="$(phone_for "$net")"
+  say "  номер этого аккаунта: $PHONE  (подставлю сам)"
+  say ""
+
+  if ! printf '%s' "$ENROLL_PY" | ssh $SSHOPTS "$REMOTE" 'umask 077; cat > "$HOME/.prodai-enroll.py"'; then
     say "  не удалось передать скрипт на сервер. Ничего не изменено."
     return 1
   fi
 
-  # tmux здесь был ошибкой: вложенный в script и ssh -t, он ломал отрисовку
-  # и оставлял локальный терминал в режиме отслеживания мыши — листание
-  # переставало работать, а на экран сыпались коды вида M64;20;12.
-  # Обрывы держим keepalive'ами, этого достаточно.
-  remote_tty "bash \$HOME/.prodai-enroll.sh"
+  remote_tty "sudo env PYTHONPATH=$APP $VPY -u \$HOME/.prodai-enroll.py $net $PHONE"
   restore_terminal
   say ""
 }
