@@ -233,7 +233,7 @@ canary() {
 # открытым текстом), и показывается тип доставки кода, которого штатный
 # скрипт не показывает вовсе.
 ENROLL_PY=$(cat <<'ENROLL_PY_EOF'
-import sys, getpass, time, asyncio, subprocess, tempfile
+import sys, getpass, time, asyncio, subprocess, tempfile, shutil
 sys.path.insert(0, "/opt/prodai-control/app")
 
 from prodai_control import enroll_telegram_user as E
@@ -255,18 +255,34 @@ def render_qr(url):
              "--disable-pip-version-check", "--target", folder, "qrcode"],
             capture_output=True, text=True, timeout=240)
         if result.returncode != 0:
-            print("  не получилось: " + (result.stderr or "")[-300:])
             print()
-            print("  Тогда так: откройте ссылку НА ТЕЛЕФОНЕ, где стоит Telegram,")
-            print("  он предложит подтвердить вход.")
+            print("!" * 62)
+            print("QR НАРИСОВАТЬ НЕЧЕМ: библиотека не установилась.")
+            print((result.stderr or "")[-300:])
+            print()
+            print("Запасной путь: откройте ССЫЛКУ НИЖЕ НА ТЕЛЕФОНЕ, где стоит")
+            print("Telegram. Он сам предложит подтвердить вход.")
+            print("Ссылку можно отправить себе в «Избранное» и нажать там.")
             print()
             print("  " + url)
+            print("!" * 62)
             return
         sys.path.insert(0, folder)
         import qrcode
-    code = qrcode.QRCode(border=2)
+    code = qrcode.QRCode(border=1)
     code.add_data(url)
     code.make(fit=True)
+    need = code.modules_count + 2
+    have = shutil.get_terminal_size((80, 24)).columns
+    if have < need:
+        print()
+        print("!" * 62)
+        print("ОКНО ТЕРМИНАЛА УЗКОЕ: есть %d знаков, коду нужно %d." % (have, need))
+        print("Код ниже разъедется и не отсканируется.")
+        print("Разверните окно на весь экран или уменьшите шрифт: Cmd и минус,")
+        print("затем запустите пункт заново.")
+        print("!" * 62)
+        print()
     code.print_ascii(invert=True)
 
 
@@ -284,7 +300,23 @@ def login_qr(client, spec):
     print()
     print("Не влезает в окно - разверните Терминал на весь экран")
     print("или уменьшите шрифт: Cmd и минус.")
-    qr = client.qr_login()
+    try:
+        qr = client.qr_login()
+    except errors.ApiIdInvalidError:
+        raise SystemExit(
+            "ОТКАЗ: api_id и api_hash не подходят друг к другу.\n"
+            "\n"
+            "У КАЖДОГО аккаунта на my.telegram.org свой собственный api_hash.\n"
+            "Хеш от другого аккаунта не подойдёт, даже если он верный сам по себе.\n"
+            "\n"
+            "Войдите на my.telegram.org номером ИМЕННО этого аккаунта,\n"
+            "раздел API development tools, и возьмите api_hash оттуда.")
+    except errors.FloodWaitError as exc:
+        raise SystemExit("ОТКАЗ: Telegram просит подождать %d секунд (%d минут)."
+                         % (exc.seconds, exc.seconds // 60))
+    except Exception as exc:
+        raise SystemExit("Вход по QR начать не удалось: %s: %s"
+                         % (type(exc).__name__, exc))
     deadline = time.time() + 300
     while True:
         print()
@@ -299,7 +331,11 @@ def login_qr(client, spec):
                 print()
                 print("Пять минут прошло, вход не подтверждён. Запустите пункт заново.")
                 return False
-            qr.recreate()
+            try:
+                qr.recreate()
+            except Exception as exc:
+                raise SystemExit("Не удалось обновить QR: %s: %s"
+                                 % (type(exc).__name__, exc))
 
 
 def login_code(client, phone):
