@@ -233,7 +233,7 @@ canary() {
 # открытым текстом), и показывается тип доставки кода, которого штатный
 # скрипт не показывает вовсе.
 ENROLL_PY=$(cat <<'ENROLL_PY_EOF'
-import sys, getpass
+import sys, getpass, time, asyncio, subprocess, tempfile
 sys.path.insert(0, "/opt/prodai-control/app")
 
 from prodai_control import enroll_telegram_user as E
@@ -242,8 +242,132 @@ from telethon.sync import TelegramClient
 from telethon import errors
 
 
+def render_qr(url):
+    # Рисует QR прямо в терминале. Если библиотеки нет, ставит её во временную
+    # папку: рабочее окружение сервиса при этом не меняется.
+    try:
+        import qrcode
+    except ImportError:
+        folder = tempfile.mkdtemp(prefix="qrlib-")
+        print("  ставлю библиотеку для рисования QR во временную папку...")
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "--quiet",
+             "--disable-pip-version-check", "--target", folder, "qrcode"],
+            capture_output=True, text=True, timeout=240)
+        if result.returncode != 0:
+            print("  не получилось: " + (result.stderr or "")[-300:])
+            print()
+            print("  Тогда так: откройте ссылку НА ТЕЛЕФОНЕ, где стоит Telegram,")
+            print("  он предложит подтвердить вход.")
+            print()
+            print("  " + url)
+            return
+        sys.path.insert(0, folder)
+        import qrcode
+    code = qrcode.QRCode(border=2)
+    code.add_data(url)
+    code.make(fit=True)
+    code.print_ascii(invert=True)
+
+
+def login_qr(client, spec):
+    print("=" * 62)
+    print("ВХОД ПО QR-КОДУ. Ни SMS, ни кодов не потребуется.")
+    print("=" * 62)
+    print()
+    print("На телефоне откройте Telegram ТЕМ аккаунтом, который подключаете:")
+    print("  " + spec["label"])
+    print()
+    print("  Настройки  ->  Устройства  ->  Подключить устройство")
+    print()
+    print("и наведите камеру на код ниже.")
+    print()
+    print("Не влезает в окно - разверните Терминал на весь экран")
+    print("или уменьшите шрифт: Cmd и минус.")
+    qr = client.qr_login()
+    deadline = time.time() + 300
+    while True:
+        print()
+        render_qr(qr.url)
+        print()
+        print("  Жду сканирования. Код сам обновится через 25 секунд, так надо.")
+        try:
+            qr.wait(25)
+            return True
+        except asyncio.TimeoutError:
+            if time.time() > deadline:
+                print()
+                print("Пять минут прошло, вход не подтверждён. Запустите пункт заново.")
+                return False
+            qr.recreate()
+
+
+def login_code(client, phone):
+    try:
+        sent = client.send_code_request(phone)
+    except errors.ApiIdInvalidError:
+        raise SystemExit("ОТКАЗ: api_id и api_hash не подходят друг к другу.\n"
+                         "Возьмите api_hash на my.telegram.org, войдя номером " + phone)
+    except errors.PhoneNumberInvalidError:
+        raise SystemExit("ОТКАЗ: Telegram не принял номер " + phone)
+    except errors.FloodWaitError as exc:
+        raise SystemExit("ОТКАЗ: Telegram просит подождать %d секунд (%d минут)."
+                         % (exc.seconds, exc.seconds // 60))
+    except errors.SendCodeUnavailableError:
+        raise SystemExit(
+            "ОТКАЗ: для этого номера Telegram уже израсходовал все способы\n"
+            "доставки кода. Снимается только временем: часы, иногда сутки.\n"
+            "Обойти нельзя. Входите по QR-коду, он кодов не требует.")
+
+    kind = type(sent.type).__name__
+    nxt = getattr(sent, "next_type", None)
+    nxt = type(nxt).__name__ if nxt else "другой попытки не предусмотрено"
+    print("-" * 62)
+    print("ЧТО ОТВЕТИЛ TELEGRAM О ДОСТАВКЕ КОДА")
+    print("  тип: " + kind)
+    print()
+    if "App" in kind:
+        print("  Код ушёл В ПРИЛОЖЕНИЕ Telegram. SMS не будет.")
+        print("  Служебный чат «Telegram», синяя галочка, отправитель 777000.")
+        print("  Смотреть в аккаунте " + phone + ", а не в соседнем.")
+    elif "Sms" in kind:
+        print("  Код отправлен SMS-кой на " + phone)
+    elif "Call" in kind or "Missed" in kind:
+        print("  Код придёт звонком на " + phone)
+    print()
+    print("  Следующей попыткой было бы: " + nxt)
+    print("-" * 62)
+    print()
+
+    code = input("Код (пустой Enter - повторная отправка): ").strip()
+    if not code:
+        from telethon.tl.functions.auth import ResendCodeRequest
+        print()
+        print("Прошу Telegram отправить ещё раз, другим способом...")
+        try:
+            again = client(ResendCodeRequest(phone, sent.phone_code_hash))
+            print("Отправлено, тип: " + type(again.type).__name__)
+        except errors.SendCodeUnavailableError:
+            raise SystemExit(
+                "Telegram отказал: все способы доставки для этого номера уже\n"
+                "израсходованы. Только ждать, либо входить по QR-коду.")
+        except errors.FloodWaitError as exc:
+            raise SystemExit("Telegram просит подождать %d секунд." % exc.seconds)
+        code = input("Код: ").strip()
+        if not code:
+            raise SystemExit("Код не введён. Ничего не изменено.")
+
+    try:
+        client.sign_in(phone=phone, code=code)
+    except errors.PhoneCodeInvalidError:
+        raise SystemExit("Код неверный. Ничего не изменено.")
+    except errors.PhoneCodeExpiredError:
+        raise SystemExit("Код просрочен. Запустите пункт заново.")
+    return True
+
+
 def main():
-    network, phone = sys.argv[1], sys.argv[2]
+    network, phone, method = sys.argv[1], sys.argv[2], sys.argv[3]
     spec = E.NETWORKS[network]
     print("=" * 62)
     print("Подключение: " + spec["label"])
@@ -269,78 +393,20 @@ def main():
     session = None
     try:
         try:
-            sent = client.send_code_request(phone)
-        except errors.ApiIdInvalidError:
-            raise SystemExit(
-                "ОТКАЗ: api_id и api_hash не подходят друг к другу.\n"
-                "Возьмите api_hash на my.telegram.org, войдя номером " + phone)
-        except errors.PhoneNumberInvalidError:
-            raise SystemExit("ОТКАЗ: Telegram не принял номер " + phone)
-        except errors.FloodWaitError as exc:
-            raise SystemExit(
-                "ОТКАЗ: Telegram просит подождать %d секунд (это %d минут).\n"
-                "Причина — частые попытки входа. Обойти нельзя, только ждать."
-                % (exc.seconds, exc.seconds // 60))
-
-        kind = type(sent.type).__name__
-        nxt = getattr(sent, "next_type", None)
-        nxt = type(nxt).__name__ if nxt else "другой попытки не предусмотрено"
-
-        print("-" * 62)
-        print("ЧТО ОТВЕТИЛ TELEGRAM О ДОСТАВКЕ КОДА")
-        print("  тип: " + kind)
-        print()
-        if "App" in kind:
-            print("  Код ушёл В ПРИЛОЖЕНИЕ Telegram. SMS не будет.")
-            print("  Ищите на устройстве, где этот аккаунт ЕЩЁ НЕ разлогинен,")
-            print("  в служебном чате «Telegram» — синяя галочка, номер 777000.")
-            print("  Чат бывает в архиве или с отключёнными уведомлениями.")
-        elif "Sms" in kind:
-            print("  Код отправлен SMS-кой на " + phone)
-        elif "Call" in kind or "Missed" in kind:
-            print("  Код придёт звонком на " + phone)
-        else:
-            print("  Необычный способ доставки, сообщите мне строку выше.")
-        print()
-        print("  Если не придёт, следующей попыткой будет: " + nxt)
-        print("-" * 62)
-        print()
-
-        code = input("Код (или просто Enter, чтобы запросить SMS): ").strip()
-        if not code:
-            print()
-            print("Запрашиваю SMS...")
-            try:
-                sent = client.send_code_request(phone, force_sms=True)
-                print("Запрошено, тип: " + type(sent.type).__name__)
-            except errors.FloodWaitError as exc:
-                raise SystemExit("Telegram просит подождать %d секунд." % exc.seconds)
-            except Exception as exc:
-                raise SystemExit("SMS запросить не удалось: %s: %s"
-                                 % (type(exc).__name__, exc))
-            code = input("Код из SMS: ").strip()
-            if not code:
-                raise SystemExit("Код не введён. Ничего не изменено.")
-
-        try:
-            client.sign_in(phone=phone, code=code)
+            done = login_qr(client, spec) if method == "qr" else login_code(client, phone)
         except errors.SessionPasswordNeededError:
             print()
             print("У аккаунта включена двухфакторная защита.")
-            password = getpass.getpass("Пароль от неё (ввод скрыт): ")
-            client.sign_in(password=password)
-        except errors.PhoneCodeInvalidError:
-            raise SystemExit("Код неверный. Ничего не изменено.")
-        except errors.PhoneCodeExpiredError:
-            raise SystemExit("Код просрочен. Запустите пункт заново.")
-
+            client.sign_in(password=getpass.getpass("Пароль от неё (ввод скрыт): "))
+            done = True
+        if not done:
+            return 1
         me = client.get_me()
         who = getattr(me, "username", None) or str(getattr(me, "id", ""))
         print()
         print("ВХОД ВЫПОЛНЕН: @" + who)
         if who and who.lower() not in spec["label"].lower():
-            print("ВНИМАНИЕ: ожидался " + spec["label"])
-            print("Вошли не тем аккаунтом — секрет всё равно сохраню, но проверьте.")
+            print("ВНИМАНИЕ: ожидался " + spec["label"] + ", проверьте, тот ли аккаунт.")
         session = client.session.save()
     finally:
         client.disconnect()
@@ -359,70 +425,55 @@ ENROLL_PY_EOF
 
 enroll_one() {
   net="$1"; human="$2"
+  PHONE="$(phone_for "$net")"
   hr
   say "Подключение: $human"
+  say "Номер: $PHONE  (подставлю сам, вводить не нужно)"
   hr
   say ""
-  say "СНАЧАЛА ПРИГОТОВЬТЕ ВСЁ, не запуская вход:"
+  say "Как входить?"
   say ""
-  say "  1. Откройте https://my.telegram.org и войдите номером ИМЕННО"
-  say "     этого аккаунта. Раздел API development tools — там api_hash."
-  say "     Скопируйте его в буфер обмена прямо сейчас."
-  say "  2. Возьмите в руки телефон с Telegram — туда придёт код."
+  say "  1) ПО QR-КОДУ — рекомендую"
+  say "     Ни SMS, ни кодов. На экране появится квадратный код,"
+  say "     наводите на него камеру телефона — ровно так подключают"
+  say "     Telegram Desktop. Лимитов Telegram на этот способ нет."
   say ""
-  say "ГДЕ ИСКАТЬ КОД. Telegram шлёт его В САМО ПРИЛОЖЕНИЕ — на то"
-  say "устройство, где вы в этот аккаунт ещё не вышли. Если активных"
-  say "сеансов не осталось нигде, код придёт SMS-кой. Проверяйте оба"
-  say "места: и чат Telegram, и сообщения телефона."
+  say "  2) По коду из Telegram"
+  say "     Тот путь, что не срабатывал. Telegram уже израсходовал все"
+  say "     способы доставки кода на этот номер и, скорее всего, откажет."
   say ""
-  say "ЕСЛИ КОД НЕ ПРИХОДИТ. После нескольких попыток подряд Telegram"
-  say "перестаёт слать коды на время — это его защита, не поломка."
-  say "Тогда единственное средство — подождать: от нескольких минут"
-  say "до нескольких часов, и не дёргать вход всё это время."
+  read -r -p "Введите 1 или 2 (просто Enter — QR): " HOW
+  case "$HOW" in
+    2) METHOD="code"; say "  выбран вход по коду" ;;
+    *) METHOD="qr";   say "  выбран вход по QR-коду" ;;
+  esac
   say ""
-  say "Почему это важно. В прошлый раз связь рвалась именно тогда, когда"
-  say "скрипт ждал, пока вы ищете значение: молчащий канал отваливается."
-  say "Теперь программа сама поддерживает связь, но чем меньше пауза,"
-  say "тем надёжнее."
+
+  say "ЧТО ПРИГОТОВИТЬ, не начиная:"
   say ""
-  say "ДВА ПРАВИЛА ВВОДА, из-за них прошлый раз и сорвался:"
+  say "  api_hash — на https://my.telegram.org, войдя номером $PHONE,"
+  say "  раздел API development tools. Скопируйте в буфер обмена."
   say ""
-  say "  - НЕ нажимайте Enter «просто так», чтобы проверить отклик."
-  say "    Пустой ответ на api_hash обрывает вход с сообщением"
-  say "    «Пустое значение», и вставленное следом уходит мимо."
-  say "  - Вставили значение — Enter ОДИН раз. Больше ничего не нажимайте."
+  if [ "$METHOD" = "qr" ]; then
+    say "  Телефон с Telegram, открытый аккаунтом $human."
+    say "  Путь в приложении:"
+    say "    Настройки  ->  Устройства  ->  Подключить устройство"
+  else
+    say "  Телефон: код придёт в служебный чат «Telegram», номер 777000."
+  fi
   say ""
-  say "И имейте в виду: api_hash сервер печатает на экран открытым"
-  say "текстом, так устроен его скрипт. Не снимайте экран и не"
-  say "пересылайте кадр. В протоколе на Рабочем столе я его заглушу."
+  say "ПОРЯДОК ВОПРОСОВ. Первые два одинаковы для обоих способов:"
   say ""
-  hr
+  say "  [sudo] password for oleg:    пароль от сервера, на экране пусто"
+  say "  api_hash:                    вставьте и Enter ОДИН раз, ввод скрыт"
+  if [ "$METHOD" = "qr" ]; then
+    say "  дальше появится QR-код:      наводите камеру, вводить нечего"
+  else
+    say "  Please enter the code...:    код из Telegram"
+  fi
+  say "  Please enter your password:  только при двухфакторной защите"
   say ""
-  say "Вопросы пойдут ПО-АНГЛИЙСКИ. Вот что отвечать на каждый —"
-  say "сверяйтесь с этим списком, отвечайте по порядку."
-  say ""
-  say "  [sudo] password for oleg:"
-  say "     Пароль от сервера. На экране не появится ничего — так и надо."
-  say ""
-  say "  api_hash ...:"
-  say "     Строка с https://my.telegram.org, раздел API development tools."
-  say "     Это то же самое значение, что и раньше: на my.telegram.org оно"
-  say "     не меняется. Просто скопируйте его оттуда снова."
-  say "     api_id система подставит сама, его не спросят."
-  say ""
-  say "  Please enter your phone (or bot token):"
-  say "     Номер ЭТОГО аккаунта, с кодом страны: +7 и десять цифр."
-  say "     Про bot token не думайте — никаких токенов сюда не нужно."
-  say ""
-  say "  Please enter the code you received:"
-  say "     Код, который придёт в само приложение Telegram."
-  say ""
-  say "  Please enter your password:"
-  say "     Появится, только если у аккаунта включена двухфакторная защита."
-  say "     Это пароль от неё, не от почты и не от сервера."
-  say ""
-  say "Код и пароль нигде не сохраняются. В файл ложится только"
-  say "строка сессии, и на экран она не выводится."
+  say "Не нажимайте Enter «на пробу»: пустой ответ на api_hash прерывает вход."
   say ""
   say "ВАЖНО: входите именно аккаунтом $human, иначе привяжется не тот."
   say ""
@@ -431,21 +482,16 @@ enroll_one() {
     return 1
   fi
   say ""
-  # Штатный enroll_telegram_user.py спрашивает номер сам и не показывает,
-  # КУДА Telegram отправил код. Поэтому вход ведём своим драйвером: он
-  # подставляет номер, печатает тип доставки, умеет принудительно запросить
-  # SMS — а записывает результат ТЕМ ЖЕ store_secret из их модуля, так что
-  # путь записи, права и копия в Bitwarden остаются штатными.
-  PHONE="$(phone_for "$net")"
-  say "  номер этого аккаунта: $PHONE  (подставлю сам)"
-  say ""
 
+  # Вход ведёт свой драйвер поверх штатного модуля: api_id берётся из политики,
+  # запись делает их же store_secret. Своё здесь — подстановка номера, скрытый
+  # ввод api_hash, показ способа доставки кода и вход по QR.
   if ! printf '%s' "$ENROLL_PY" | ssh $SSHOPTS "$REMOTE" 'umask 077; cat > "$HOME/.prodai-enroll.py"'; then
     say "  не удалось передать скрипт на сервер. Ничего не изменено."
     return 1
   fi
 
-  remote_tty "sudo env PYTHONPATH=$APP $VPY -u \$HOME/.prodai-enroll.py $net $PHONE"
+  remote_tty "sudo env PYTHONPATH=$APP $VPY -u \$HOME/.prodai-enroll.py $net $PHONE $METHOD"
   restore_terminal
   say ""
 }
