@@ -426,10 +426,11 @@ const chip = (s, code) => {
   T(s, 'ODRybakov@mail.ru', { x: M + 0.58, y: 6.15, w: 4.4, h: 0.38, fontSize: 17, color: CREAM });
 
   const cardW = 2.32, gap = 0.42, x0 = 7.26 + ((W - M - 7.26) - (2 * cardW + gap)) / 2, cardY = 2.72, qs = 1.72;
-  [['TELEGRAM', 'qr-telegram.png', 'send'], ['WHATSAPP', 'qr-whatsapp.png', 'messagecircle']].forEach(([lab, qr, icon], i) => {
+  [['TELEGRAM', 'qr-telegram.png', 'send'], ['MAX', 'qr-max.png', 'messagecircle']].forEach(([lab, qr, icon], i) => {
     const x = x0 + i * (cardW + gap);
     RR(s, { x, y: cardY, w: cardW, h: 3.02, fill: { color: INK }, line: { color: GOLDD, width: 1 }, rectRadius: 0.06 });
     IMG(s, { path: ic(icon), x: x + cardW / 2 - 0.19, y: cardY + 0.26, w: 0.38, h: 0.38 });
+    RR(s, { x: x + (cardW - qs) / 2 - 0.06, y: cardY + 0.72, w: qs + 0.12, h: qs + 0.12, fill: { color: CREAM }, rectRadius: 0.05 });
     IMG(s, { path: path.join(A, qr), x: x + (cardW - qs) / 2, y: cardY + 0.78, w: qs, h: qs });
     T(s, lab, { x, y: cardY + 2.62, w: cardW, h: 0.28, align: 'center', fontSize: 12.5, bold: true, color: GOLDL, charSpacing: 2 });
   });
