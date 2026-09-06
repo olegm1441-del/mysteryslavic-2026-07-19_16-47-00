@@ -27,6 +27,8 @@ const ic = n => path.join(A, `ic-${n}.png`);
 
 const navy  = () => { const s = pres.addSlide(); s.background = { path: path.join(A, 'tex-navy.jpg') };  return s; };
 const cream = () => { const s = pres.addSlide(); s.background = { path: path.join(A, 'tex-cream.jpg') }; return s; };
+// scrims are baked into these files, so no overlay rectangle is needed
+const photo = f => { const s = pres.addSlide(); s.background = { path: path.join(A, f) }; return s; };
 
 // eyebrow — small letterspaced gold caption
 const eyebrow = (s, text, x, y, color = GOLD) =>
@@ -45,8 +47,7 @@ const chip = (s, code) => {
 
 // ============================================================ 01 · COVER
 {
-  const s = navy();
-  R(s, { x: 0, y: 0, w: W, h: H, fill: { color: INK, transparency: 25 } });
+  const s = photo('ph-P1-cover.jpg');
   IMG(s, { path: path.join(A, 'logo.png'), x: M, y: 0.55, w: 0.55, h: 0.55 });
   T(s, 'ПРОДАЙ ЗА МЕНЯ · КАЗАНЬ', { x: M + 0.75, y: 0.72, w: 5, h: 0.24, fontSize: 11, bold: true, color: CREAM, charSpacing: 2.6 });
 
@@ -57,13 +58,11 @@ const chip = (s, code) => {
   R(s, { x: M, y: 4.95, w: 1.5, h: 0.035, fill: { color: GOLD } });
   T(s, 'ДЕНЬГИ ЗА ИМУЩЕСТВО', { x: M, y: 5.28, w: 9, h: 0.6, fontSize: 27, bold: true, color: GOLDL, charSpacing: 0.6 });
   T(s, 'ОДИН ПОДРЯДЧИК ВМЕСТО ДЕСЯТИ', { x: M, y: 6.12, w: 9, h: 0.36, fontSize: 15, color: MUTED, charSpacing: 2.2 });
-  chip(s, 'P1');
 }
 
 // ============================================================ 02 · ПРОБЛЕМА
 {
-  const s = navy();
-  R(s, { x: 0, y: 0, w: W, h: H, fill: { color: INK, transparency: 20 } });
+  const s = photo('ph-P2-problem.jpg');
   eyebrow(s, 'ОФИСНЫЙ ВЫЕЗД', M, 0.6);
 
   T(s, 'ЧТО ИЗ ОФИСА\nНЕ ПОЕДЕТ С ВАМИ?', {
@@ -85,28 +84,26 @@ const chip = (s, code) => {
     T(s, t, { x, y: 5.7, w: cw - 0.35, h: 0.32, fontSize: 15, bold: true, color: GOLDL, charSpacing: 1.4 });
     T(s, c, { x, y: 6.12, w: cw - 0.35, h: 0.66, fontSize: 12.5, color: MUTED, lineSpacing: 17 });
   });
-  chip(s, 'P2');
 }
 
 // ============================================================ 03 · ХВОСТ
 {
-  const s = cream();
+  const s = photo('ph-P3-tail.jpg');
   eyebrow(s, 'ГЛАВНАЯ ПРОБЛЕМА ОФИСНОГО ВЫЕЗДА', M, 0.68, GOLDD);
 
   T(s, 'ПОСЛЕДНИЙ ШКАФ\nБЛОКИРУЕТ АКТ\nТАК ЖЕ, КАК ВЕСЬ ОФИС', {
-    x: M, y: 1.16, w: 6.3, h: 2.4, fontSize: 33, bold: true, color: INK, lineSpacing: 40 });
+    x: M, y: 1.16, w: 5.9, h: 2.4, fontSize: 32, bold: true, color: INK, lineSpacing: 40 });
 
   T(s, 'Ноутбуки и серверы уедут. Останется хвост:', {
-    x: M, y: 3.72, w: 6.1, h: 0.34, fontSize: 15.5, color: MUTEDL });
+    x: M, y: 3.42, w: 5.9, h: 0.34, fontSize: 15.5, color: MUTEDL });
 
-  T(s, '12 столов  ·  17 кресел  ·  3 шкафа  ·  2 тумбы  ·  МФУ  ·  микроволновка  ·  стойка ресепшен  ·  ковролин  ·  доска  ·  кабели  ·  коробки', {
-    x: M, y: 4.2, w: 6.1, h: 1.55, fontSize: 15, bold: true, color: INK, lineSpacing: 27 });
+  T(s, '12 столов · 17 кресел · 3 шкафа · 2 тумбы\nМФУ · микроволновка · стойка ресепшен\nковролин · доска · кабели · коробки', {
+    x: M, y: 3.92, w: 5.7, h: 1.4, fontSize: 15, bold: true, color: INK, lineSpacing: 28 });
 
-  R(s, { x: M, y: 6.0, w: 6.1, h: 0.012, fill: { color: LINEL } });
+  R(s, { x: M, y: 5.66, w: 5.7, h: 0.012, fill: { color: LINEL } });
   T(s, 'По отдельности — терпимо.\nВместе — десятки решений и сорванный срок.', {
-    x: M, y: 6.22, w: 6.1, h: 0.72, fontSize: 14, color: MUTEDL, lineSpacing: 20 });
+    x: M, y: 5.9, w: 5.9, h: 0.72, fontSize: 14, color: MUTEDL, lineSpacing: 20 });
 
-  slot(s, 'P3', 7.55, 0.85, 4.93, 5.8, 'почти пустой офис\nи оставшийся хвост в углу');
 }
 
 // ============================================================ 04 · ТРИ ПУТИ
@@ -119,9 +116,9 @@ const chip = (s, code) => {
 
   const colW = (CW - 2 * 0.5) / 3, pitch = colW + 0.5;
   const cols = [
-    ['illus-P4-sami.png',        'РАЗБИРАТЬСЯ САМИМ',  '5–10 подрядчиков и десятки\nчасов ваших сотрудников', false],
-    ['illus-P5-odnim-lotom.png', 'ОТДАТЬ ОДНИМ ЛОТОМ', 'Быстро, но по цене вывоза:\nликвидное уходит вместе с хламом', false],
-    ['illus-P6-nam.png',         'ОТДАТЬ НАМ',         'Помещение пустое к дате\nи деньги за ликвидное', true],
+    ['ill-vyvezti.png', 'ВЫВЕЗТИ ВСЁ',     'Заплатить за вывоз\nи не вернуть ничего', false],
+    ['ill-sami.png',    'ПРОДАВАТЬ САМИМ', 'Опись, фото, объявления, звонки,\nпоказы — и хвост к дедлайну', false],
+    ['ill-nam.png',     'ОТДАТЬ НАМ',      'Помещение пустое к дате\nи деньги за всё ликвидное', true],
   ];
   cols.forEach(([img, title, cap, hi], i) => {
     const x = M + i * pitch;
@@ -132,7 +129,7 @@ const chip = (s, code) => {
   });
 
   RR(s, { x: M, y: 6.55, w: CW, h: 0.6, fill: { color: INK3 }, line: { color: GOLDD, width: 1 }, rectRadius: 0.05 });
-  T(s, 'ВАРИАНТ 2 И ВАРИАНТ 3 МЫ СЧИТАЕМ ДЛЯ ВАС ДО СТАРТА — РАЗНИЦУ В ДЕНЬГАХ ВЫ ВИДИТЕ ЗАРАНЕЕ', {
+  T(s, 'ПОСЧИТАЕМ ЭТИ ТРИ ПУТИ ДЛЯ ВАШЕГО ОФИСА — В ДЕНЬГАХ И В ЧАСАХ ВАШИХ СОТРУДНИКОВ', {
     x: M, y: 6.72, w: CW, h: 0.28, align: 'center', fontSize: 12.5, bold: true, color: GOLDL, charSpacing: 1.2 });
 }
 
@@ -203,40 +200,38 @@ const chip = (s, code) => {
     x: M, y: 6.66, w: CW, h: 0.32, align: 'center', fontSize: 13.5, bold: true, color: GOLDL, charSpacing: 1.6 });
 }
 
-// ============================================================ 07 · ПРИМЕР РАСЧЁТА
+// ============================================================ 07 · ТРИ ПУТИ В ДЕНЬГАХ
 {
   const s = cream();
-  eyebrow(s, 'ЭКОНОМИКА', M, 0.6, GOLDD);
-  T(s, 'ПРИМЕР РАСЧЁТА', { x: M, y: 0.96, w: 8, h: 0.7, fontSize: 38, bold: true, color: INK });
-  T(s, 'Офис ~300 м², 25 рабочих мест, срок 5 дней. Формат B.', {
-    x: M, y: 1.68, w: 9, h: 0.32, fontSize: 14.5, color: MUTEDL });
+  eyebrow(s, 'ПРИМЕР · ОФИС 300 м², 25 РАБОЧИХ МЕСТ, ОСВОБОДИТЬ ЗА 5 ДНЕЙ', M, 0.58, GOLDD);
+  T(s, 'ТЕ ЖЕ ТРИ ПУТИ — В ДЕНЬГАХ И ЧАСАХ', {
+    x: M, y: 0.92, w: 11.4, h: 0.72, fontSize: 36, bold: true, color: INK });
 
-  const by = 2.26, bh = 1.62;
-  const box = (x, w, val, lab, hi) => {
-    RR(s, { x, y: by, w, h: bh, fill: { color: hi ? INK : WHITE }, line: { color: hi ? INK : LINEL, width: 1 }, rectRadius: 0.05 });
-    T(s, val, { x, y: by + 0.38, w, h: 0.62, align: 'center', fontSize: 30, bold: true, color: hi ? GOLDL : INK });
-    T(s, lab, { x: x + 0.16, y: by + 1.06, w: w - 0.32, h: 0.34, align: 'center', fontSize: 10.5, bold: true, color: hi ? MUTED : MUTEDL, charSpacing: 1.4 });
-  };
-  box(M, 3.35, '380 000 ₽', 'ПРОДАНО', false);
-  T(s, '−', { x: 4.26, y: by + 0.48, w: 0.46, h: 0.5, align: 'center', fontSize: 26, bold: true, color: GOLD });
-  box(4.78, 3.35, '158 000 ₽', '25 000 ₽ + 35% · НАША УСЛУГА', false);
-  T(s, '=', { x: 8.21, y: by + 0.48, w: 0.46, h: 0.5, align: 'center', fontSize: 26, bold: true, color: GOLD });
-  box(8.73, 3.75, '222 000 ₽', 'ВАМ', true);
+  RR(s, { x: M, y: 1.8, w: 7.3, h: 0.58, fill: { color: WHITE }, line: { color: LINEL, width: 1 }, rectRadius: 0.05 });
+  T(s, 'ЛИКВИДНОЕ ИМУЩЕСТВО ПО ОЦЕНКЕ', {
+    x: M + 0.34, y: 1.8, w: 4.5, h: 0.58, valign: 'ctr', fontSize: 11, bold: true, color: MUTEDL, charSpacing: 1.2 });
+  T(s, '420 000 ₽', { x: M + 4.9, y: 1.8, w: 2.1, h: 0.58, valign: 'ctr', align: 'right', fontSize: 19, bold: true, color: INK });
 
-  RR(s, { x: M, y: 4.28, w: 6.9, h: 1.66, fill: { color: WHITE }, line: { color: LINEL, width: 1 }, rectRadius: 0.05 });
-  IMG(s, { path: ic('checkcircle'), x: M + 0.42, y: 4.68, w: 0.48, h: 0.48 });
-  T(s, 'ПОМЕЩЕНИЕ СВОБОДНО К ВАШЕЙ ДАТЕ', {
-    x: M + 1.08, y: 4.72, w: 5.4, h: 0.32, fontSize: 17, bold: true, color: INK });
-  T(s, 'Продажи продолжаются и после даты —\nуже без вашего участия', {
-    x: M + 1.08, y: 5.16, w: 5.4, h: 0.6, fontSize: 12.5, color: MUTEDL, lineSpacing: 18 });
+  const cw = (CW - 2 * 0.3) / 3, pitch = cw + 0.3, cy = 2.62, ch = 3.5;
+  const cards = [
+    ['A', 'ВЫВЕЗТИ ВСЁ',    '− 28 000 ₽',  MUTEDL, '~ 1 день',    'Демонтаж, машины\nи утилизация — за ваш счёт.\nЛиквидное уезжает в мусор.', false],
+    ['B', 'ПРОДАТЬ САМИМ',  '+ 73 000 ₽',  INK,    '~ 30 часов',  'ИТ — одним лотом за полцены.\nМебель и кухня — на вывоз\nза 22 000 ₽.', false],
+    ['C', 'ОТДАТЬ НАМ',     '+ 248 000 ₽', GOLDL,  'до 90 минут', 'Продано 420 000 ₽\nминус наша услуга 172 000 ₽\n(25 000 ₽ + 35%).', true],
+  ];
+  cards.forEach(([letter, title, money, moneyColor, time, note, hi], i) => {
+    const x = M + i * pitch;
+    RR(s, { x, y: cy, w: cw, h: ch, fill: { color: hi ? INK : WHITE }, line: { color: hi ? INK : LINEL, width: 1 }, rectRadius: 0.05 });
+    T(s, letter, { x: x + 0.42, y: cy + 0.34, w: 0.4, h: 0.26, fontSize: 11, bold: true, color: hi ? GOLD : GOLDD, charSpacing: 1.4 });
+    T(s, title, { x: x + 0.86, y: cy + 0.34, w: cw - 1.28, h: 0.26, fontSize: 11, bold: true, color: hi ? GOLD : GOLDD, charSpacing: 1.4 });
+    T(s, money, { x: x + 0.42, y: cy + 0.82, w: cw - 0.84, h: 0.62, fontSize: 31, bold: true, color: moneyColor });
+    R(s, { x: x + 0.42, y: cy + 1.66, w: cw - 0.84, h: 0.012, fill: { color: hi ? GOLDD : LINEL } });
+    T(s, 'ВАШЕ ВРЕМЯ', { x: x + 0.42, y: cy + 1.88, w: cw - 0.84, h: 0.24, fontSize: 10, bold: true, color: hi ? MUTED : MUTEDL, charSpacing: 1.6 });
+    T(s, time, { x: x + 0.42, y: cy + 2.18, w: cw - 0.84, h: 0.34, fontSize: 17, bold: true, color: hi ? CREAM : INK });
+    T(s, note, { x: x + 0.42, y: cy + 2.6, w: cw - 0.84, h: 0.78, fontSize: 11, color: hi ? MUTED : MUTEDL, lineSpacing: 15.5 });
+  });
 
-  RR(s, { x: 8.05, y: 4.28, w: 4.43, h: 1.66, fill: { color: WHITE }, line: { color: LINEL, width: 1 }, rectRadius: 0.05 });
-  T(s, 'ТОТ ЖЕ ОБЪЁМ В ФОРМАТЕ A', { x: 8.42, y: 4.55, w: 3.8, h: 0.26, fontSize: 10.5, bold: true, color: GOLDD, charSpacing: 1.4 });
-  T(s, 'услуга 105 000 ₽ · вам 275 000 ₽', { x: 8.42, y: 4.93, w: 3.8, h: 0.34, fontSize: 15, bold: true, color: INK });
-  T(s, 'но вещи остаются в офисе\nдо момента продажи', { x: 8.42, y: 5.32, w: 3.8, h: 0.5, fontSize: 12.5, color: MUTEDL, lineSpacing: 17 });
-
-  T(s, 'Пример. Итог зависит от состава имущества и срока — считаем по вашему видео.', {
-    x: M, y: 6.34, w: CW, h: 0.3, fontSize: 12, italic: true, color: MUTEDL });
+  T(s, 'Пример по референсному объекту. Цены на б/у имущество и объём работ считаем по вашему видео.', {
+    x: M, y: 6.42, w: CW, h: 0.3, fontSize: 12, italic: true, color: MUTEDL });
 }
 
 // ============================================================ 08 · ИТ ОТДЕЛЬНО
@@ -286,7 +281,8 @@ const chip = (s, code) => {
   RR(s, { x: cx + cwd - 1.32, y: 1.15, w: 0.9, h: 0.3, fill: { color: 'EFE7DA' }, rectRadius: 0.05 });
   T(s, 'ПРИМЕР', { x: cx + cwd - 1.32, y: 1.21, w: 0.9, h: 0.22, align: 'center', fontSize: 9.5, bold: true, color: MUTEDL, charSpacing: 1 });
 
-  slot(s, 'P8', cx + 0.42, 1.66, cwd - 0.84, 1.72, 'фото позиции\n(офисное кресло)');
+  IMG(s, { path: path.join(A, 'ph-P8-chair.jpg'), x: cx + 0.42, y: 1.66, w: cwd - 0.84, h: 1.72 });
+  RR(s, { x: cx + 0.42, y: 1.66, w: cwd - 0.84, h: 1.72, fill: { color: WHITE, transparency: 100 }, line: { color: LINEL, width: 1 }, rectRadius: 0.04 });
 
   T(s, 'Кресло эргономичное, сетка · 17 шт', {
     x: cx + 0.42, y: 3.54, w: cwd - 0.84, h: 0.36, fontSize: 16, bold: true, color: INK });
@@ -413,8 +409,7 @@ const chip = (s, code) => {
 
 // ============================================================ 14 · CTA
 {
-  const s = navy();
-  R(s, { x: 0, y: 0, w: W, h: H, fill: { color: INK, transparency: 18 } });
+  const s = photo('ph-P7-cta.jpg');
   IMG(s, { path: path.join(A, 'logo.png'), x: M, y: 0.5, w: 0.5, h: 0.5 });
   T(s, 'ПРОДАЙ ЗА МЕНЯ', { x: M + 0.7, y: 0.52, w: 5, h: 0.24, fontSize: 11.5, bold: true, color: CREAM, charSpacing: 2.4 });
   T(s, 'Освобождение офиса под ключ · Казань', { x: M + 0.7, y: 0.78, w: 5, h: 0.22, fontSize: 10.5, color: MUTED });
@@ -430,17 +425,17 @@ const chip = (s, code) => {
   IMG(s, { path: ic('mail'), x: M, y: 6.16, w: 0.34, h: 0.34 });
   T(s, 'ODRybakov@mail.ru', { x: M + 0.58, y: 6.15, w: 4.4, h: 0.38, fontSize: 17, color: CREAM });
 
-  const qw = 1.95, gap = 0.62, x0 = 7.28 + ((W - M - 7.28) - (2 * qw + gap)) / 2;
-  [['TELEGRAM', 'send'], ['WHATSAPP', 'messagecircle']].forEach(([lab, icon], i) => {
-    const x = x0 + i * (qw + gap);
-    RR(s, { x, y: 2.86, w: qw, h: qw, fill: { color: INK2 }, line: { color: GOLDD, width: 1, dashType: 'dash' }, rectRadius: 0.05 });
-    IMG(s, { path: ic(icon), x: x + qw / 2 - 0.24, y: 3.44, w: 0.48, h: 0.48 });
-    T(s, 'QR', { x, y: 4.08, w: qw, h: 0.28, align: 'center', fontSize: 13, bold: true, color: GOLD, charSpacing: 2 });
-    T(s, lab, { x, y: 5.02, w: qw, h: 0.28, align: 'center', fontSize: 13, bold: true, color: CREAM, charSpacing: 2 });
+  const cardW = 2.32, gap = 0.42, x0 = 7.26 + ((W - M - 7.26) - (2 * cardW + gap)) / 2, cardY = 2.72, qs = 1.72;
+  [['TELEGRAM', 'qr-telegram.png', 'send'], ['WHATSAPP', 'qr-whatsapp.png', 'messagecircle']].forEach(([lab, qr, icon], i) => {
+    const x = x0 + i * (cardW + gap);
+    RR(s, { x, y: cardY, w: cardW, h: 3.02, fill: { color: INK }, line: { color: GOLDD, width: 1 }, rectRadius: 0.06 });
+    IMG(s, { path: ic(icon), x: x + cardW / 2 - 0.19, y: cardY + 0.26, w: 0.38, h: 0.38 });
+    IMG(s, { path: path.join(A, qr), x: x + (cardW - qs) / 2, y: cardY + 0.78, w: qs, h: qs });
+    T(s, lab, { x, y: cardY + 2.62, w: cardW, h: 0.28, align: 'center', fontSize: 12.5, bold: true, color: GOLDL, charSpacing: 2 });
   });
-  T(s, 'Предварительная оценка — бесплатно', {
-    x: 7.28, y: 5.62, w: W - M - 7.28, h: 0.3, align: 'center', fontSize: 12.5, color: MUTED });
-  chip(s, 'P7');
+  RR(s, { x: x0, y: 5.98, w: 2 * cardW + gap, h: 0.46, fill: { color: INK, transparency: 12 }, rectRadius: 0.06 });
+  T(s, 'Наведите камеру — напишите нам в мессенджер', {
+    x: x0, y: 5.98, w: 2 * cardW + gap, h: 0.46, align: 'center', valign: 'ctr', fontSize: 12.5, color: CREAM });
 }
 
 pres.writeFile({ fileName: OUT }).then(() => console.log('WROTE', OUT));
