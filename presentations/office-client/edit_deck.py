@@ -14,6 +14,8 @@ CREAM = RGBColor(0xF7,0xF1,0xE7); GOLD = RGBColor(0xC8,0x9B,0x45)
 GOLDL = RGBColor(0xD9,0xBC,0x7A); GOLDD = RGBColor(0x6E,0x54,0x26)
 FF='Inter'
 
+# ВНИМАНИЕ: скрипт писался под deck-v2. Актуальная ручная версия — deck-v3,
+# её структура другая (10 слайдов), поэтому скрипт как есть на ней не запускать.
 prs = Presentation('src-images/deck-v2-hand-edited.pptx')
 S = list(prs.slides)
 
