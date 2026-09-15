@@ -1,0 +1,120 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>avatar scene</title>
+<style>
+  html,body{margin:0;padding:0;background:#0C3239;overflow:hidden}
+  svg{display:block;width:1280px;height:1280px;shape-rendering:geometricPrecision}
+</style>
+<svg id="stage" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 1280" width="1280" height="1280">
+  <defs>
+    <!-- arrow shape: shaft + head, drawn at rest position -->
+    <g id="arrowShape">
+      <rect x="742" y="602" width="220" height="92" rx="10"/>
+      <path d="M 944,533 L 1090,636 A 16,16 0 0 1 1090,660 L 944,763 A 12,12 0 0 1 926,753 L 926,543 A 12,12 0 0 1 944,533 Z"/>
+    </g>
+    <clipPath id="arrowClip">
+      <rect x="744" y="400" width="800" height="500"/>
+    </clipPath>
+  </defs>
+
+  <rect x="-40" y="-40" width="1360" height="1360" fill="#0C3239"/>
+
+  <!-- cream mark -->
+  <g id="frame" fill="#FDF6EA">
+    <path d="M 258,1007.5
+             L 258,353
+             A 148,148 0 0 1 406,205
+             L 874,205
+             A 148,148 0 0 1 1022,353
+             L 1022,537
+             L 877,537
+             L 877,406
+             A 58,58 0 0 0 819,348
+             L 461,348
+             A 58,58 0 0 0 403,406
+             L 403,1007.5
+             A 72.5,72.5 0 0 1 258,1007.5 Z"/>
+    <rect x="877" y="760" width="145" height="320" rx="72.5"/>
+  </g>
+
+  <!-- orange -->
+  <g fill="#FBA347">
+    <g clip-path="url(#arrowClip)">
+      <g id="arrow"><use href="#arrowShape"/></g>
+    </g>
+    <g id="block"><rect x="600" y="574" width="145" height="148" rx="40"/></g>
+    <g id="dot"><circle cx="497" cy="648" r="82"/></g>
+  </g>
+</svg>
+<script>
+const $ = id => document.getElementById(id);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const seg=(t,a,b)=>clamp((t-a)/(b-a),0,1);
+const lerp=(a,b,t)=>a+(b-a)*t;
+const inCubic=x=>x*x*x;
+const outCubic=x=>1-Math.pow(1-x,3);
+const inOutCubic=x=>x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2;
+const outElastic=x=>{const c=(2*Math.PI)/3;return x<=0?0:x>=1?1:Math.pow(2,-10*x)*Math.sin((x*10-0.75)*c)+1;};
+
+// scale transform around a pivot
+const sc=(px,py,sx,sy)=>`translate(${px} ${py}) scale(${sx} ${sy}) translate(${-px} ${-py})`;
+const arrowT=(dx,sx)=>`translate(${dx} 0) ${sc(745,648,sx,1)}`;
+
+// timeline keys (fractions of the 4s loop)
+const K={blinkA:0.06,blinkB:0.19, windA:0.26,windB:0.33, fireB:0.50,
+         gapB:0.56, loadB:0.82, setB:0.94};
+
+function setT(t){
+  t = ((t % 1) + 1) % 1;
+
+  // --- cream mark: slow breathing + recoil kick when the arrow fires ---
+  const breathe = 1 + 0.009*Math.sin(2*Math.PI*t);
+  const recoil  = 1 - 0.014*Math.sin(Math.PI*seg(t,K.windB,K.windB+0.13));
+  $('frame').setAttribute('transform', sc(640,640,breathe*recoil,breathe*recoil));
+
+  // --- arrow ---
+  let ax=0, asx=1, aop=1;
+  if (t < K.windA){                                   // rest
+    ax=0;
+  } else if (t < K.windB){                            // wind-up: pull back into the block
+    const p=inOutCubic(seg(t,K.windA,K.windB));
+    ax=lerp(0,-34,p); asx=lerp(1,0.93,p);
+  } else if (t < K.fireB){                            // fire: accelerate out of frame
+    const p=seg(t,K.windB,K.fireB), e=inCubic(p);
+    ax=lerp(-34,900,e);
+    asx=lerp(0.93,1.32,clamp(p*1.7,0,1));
+    aop=1-inCubic(seg(p,0.55,1));
+  } else if (t < K.gapB){                             // beat: nothing in the barrel
+    ax=900; aop=0;
+  } else if (t < K.loadB){                            // reload: a new arrow slides out
+    const p=seg(t,K.gapB,K.loadB);
+    ax=lerp(-345,26,outCubic(p));
+    asx=lerp(0.55,1,outCubic(clamp(p*1.35,0,1)));
+    aop=clamp(p*4,0,1);
+  } else {                                            // settle
+    ax=lerp(26,0,outElastic(seg(t,K.loadB,K.setB)));
+  }
+  $('arrow').setAttribute('transform', arrowT(ax,asx));
+  $('arrow').setAttribute('opacity', aop.toFixed(4));
+
+  // --- block: squash on wind-up, elastic snap on release ---
+  let bsx=1,bsy=1;
+  if (t>=K.windA && t<K.windB){
+    const p=inOutCubic(seg(t,K.windA,K.windB));
+    bsx=lerp(1,0.84,p); bsy=lerp(1,1.12,p);
+  } else if (t>=K.windB && t<K.windB+0.26){
+    const e=outElastic(seg(t,K.windB,K.windB+0.26));
+    bsx=lerp(0.84,1,e); bsy=lerp(1.12,1,e);
+  }
+  $('block').setAttribute('transform', sc(672.5,648,bsx,bsy));
+
+  // --- dot: terminal-cursor blink at rest, pulse on fire ---
+  const blink = 1 - 0.78*Math.sin(Math.PI*seg(t,K.blinkA,K.blinkB));
+  const pulse = 1 + 0.17*Math.sin(Math.PI*seg(t,K.windA,K.windB+0.11));
+  $('dot').setAttribute('opacity', blink.toFixed(4));
+  $('dot').setAttribute('transform', sc(497,648,pulse,pulse));
+}
+window.setT=setT;
+setT(0);
+window.__ready=true;
+</script>

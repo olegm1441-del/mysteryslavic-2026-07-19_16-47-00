@@ -1,0 +1,6 @@
+out/
+node_modules/
+*_sub/
+*_in/
+*_blurred/
+palette.png
