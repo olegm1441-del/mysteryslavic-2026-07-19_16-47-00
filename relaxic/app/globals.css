@@ -1,0 +1,96 @@
+@import "tailwindcss";
+
+/* ── Relaxic. Токены из docs/03-BRANDBOOK.md ───────────────────────── */
+@theme {
+  --color-ink:        #141110;
+  --color-ink-2:      #1E1917;
+  --color-ink-3:      #2A2321;
+  --color-canvas:     #F6F1E8;
+  --color-canvas-2:   #EDE6DA;
+  --color-surik:      #E8482B;
+  --color-surik-deep: #CE3114;
+  --color-ultramarin: #2B4BE8;
+  --color-turquoise:  #1FB8A0;
+  --color-ochre:      #E9B949;
+  --color-fog:        #9A9088;
+
+  --font-display: "Unbounded", system-ui, sans-serif;
+  --font-text:    "Onest", system-ui, sans-serif;
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in:  cubic-bezier(0.4, 0, 1, 1);
+}
+
+:root {
+  --bg: var(--color-ink);
+  --surface: var(--color-ink-2);
+  --border: var(--color-ink-3);
+  --text: var(--color-canvas);
+  --text-muted: var(--color-fog);
+  --accent: var(--color-surik);
+  /* Уголь, а не белый: 4.83:1 против 3.89:1. См. бренд-бук, раздел 3. */
+  --accent-contrast: var(--color-ink);
+}
+
+/* Светлая рабочая поверхность: фильтры, корзина, чекаут */
+[data-surface="light"] {
+  --bg: var(--color-canvas);
+  --surface: #FFFFFF;
+  --border: #DDD4C6;
+  --text: var(--color-ink);
+  --text-muted: #6E655D;
+  --accent-contrast: var(--color-ink);
+}
+
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-text);
+  font-synthesis-weight: none;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, .display { font-family: var(--font-display); letter-spacing: -0.02em; }
+
+/* Цены не должны «прыгать» в списке */
+.tnum { font-variant-numeric: tabular-nums; }
+
+/* Контекстные ссылки: заметные, но не кричащие. Бренд-бук, раздел 6. */
+.prose a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in oklab, var(--accent) 35%, transparent);
+  text-underline-offset: 0.22em;
+  text-decoration-thickness: 1px;
+  transition: text-decoration-color var(--t, 180ms), color 180ms;
+}
+.prose a:hover {
+  color: var(--accent);
+  text-decoration-color: var(--accent);
+  text-decoration-thickness: 2px;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* Фирменная анимация «Раскрашивание»: контур → цвет, сектор за сектором */
+@keyframes paint-in {
+  from { clip-path: inset(0 100% 0 0); opacity: .35; }
+  to   { clip-path: inset(0 0 0 0);    opacity: 1; }
+}
+.paint-in { animation: paint-in 700ms var(--ease-out) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}

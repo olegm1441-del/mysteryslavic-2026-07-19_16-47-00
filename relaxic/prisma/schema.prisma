@@ -1,0 +1,206 @@
+// Relaxic — схема данных. Подробности: docs/02-TZ.md, раздел 8.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Prisma 7: строка подключения живёт в prisma.config.ts, а не здесь.
+datasource db {
+  provider = "postgresql"
+}
+
+enum Technique {
+  PAINT_BY_NUMBERS
+  DIAMOND_MOSAIC
+  CROSS_STITCH
+}
+
+enum OrderStatus {
+  NEW
+  CONFIRMED
+  PAID
+  SHIPPED
+  DONE
+  CANCELLED
+}
+
+enum ArticleCategory {
+  UNIVERSE_GUIDE
+  WORKSHOP
+  STORIES
+  GIFT_GUIDE
+  RELAX
+  BACKSTAGE
+}
+
+model Universe {
+  id          String    @id @default(cuid())
+  slug        String    @unique
+  title       String
+  tagline     String?
+  description String?
+  coverUrl    String?
+  tags        String[]
+  sort        Int       @default(0)
+  products    Product[]
+}
+
+model Product {
+  id          String    @id @default(cuid())
+  slug        String    @unique
+  title       String
+  description String
+  story       String?
+  technique   Technique
+  universeId  String
+  universe    Universe  @relation(fields: [universeId], references: [id])
+  price       Int
+  oldPrice    Int?
+  difficulty  Int
+  hours       Int
+  colorsCount Int?
+  minAge      Int       @default(6)
+  boxContents Json
+  specs       Json
+  isHit       Boolean   @default(false)
+  isNew       Boolean   @default(false)
+  inStock     Boolean   @default(true)
+
+  seoTitle       String?
+  seoDescription String?
+
+  sizes      ProductSize[]
+  images     ProductImage[]
+  reviews    Review[]
+  orderItems OrderItem[]
+
+  createdAt DateTime @default(now())
+
+  @@index([technique, universeId])
+  @@index([difficulty])
+}
+
+model ProductSize {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  label     String
+  width     Int
+  height    Int
+  priceDiff Int     @default(0)
+}
+
+model ProductImage {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url       String
+  alt       String
+  sort      Int     @default(0)
+}
+
+model Order {
+  id           String      @id @default(cuid())
+  number       String      @unique
+  customerName String
+  phone        String
+  email        String?
+  deliveryType String
+  address      String?
+  comment      String?
+  itemsTotal   Int
+  deliveryCost Int         @default(0)
+  total        Int
+  status       OrderStatus @default(NEW)
+  items        OrderItem[]
+
+  // Заказ сохраняется, даже если Telegram недоступен. ТЗ, раздел 5.
+  notifiedAt  DateTime?
+  notifyError String?
+
+  createdAt DateTime @default(now())
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  title     String
+  size      String
+  price     Int
+  qty       Int
+}
+
+model Review {
+  id         String   @id @default(cuid())
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  authorName String
+  rating     Int
+  text       String
+  photoUrl   String?
+  isApproved Boolean  @default(false)
+  createdAt  DateTime @default(now())
+}
+
+model Article {
+  id                String          @id @default(cuid())
+  slug              String          @unique
+  title             String
+  excerpt           String
+  content           String
+  category          ArticleCategory
+  coverUrl          String?
+  readMinutes       Int             @default(5)
+  relatedProductIds String[]
+  publishedAt       DateTime?
+
+  seoTitle       String?
+  seoDescription String?
+
+  @@index([category])
+}
+
+model GalleryItem {
+  id         String   @id @default(cuid())
+  imageUrl   String
+  authorName String?
+  productId  String?
+  caption    String?
+  isApproved Boolean  @default(false)
+  createdAt  DateTime @default(now())
+}
+
+model CustomRequest {
+  id        String     @id @default(cuid())
+  name      String
+  contact   String
+  technique Technique?
+  size      String?
+  comment   String?
+  imageUrl  String?
+  createdAt DateTime   @default(now())
+}
+
+// 152-ФЗ: без записи факта согласия его нельзя подтвердить при проверке.
+model Consent {
+  id            String   @id @default(cuid())
+  kind          String
+  analytics     Boolean  @default(false)
+  marketing     Boolean  @default(false)
+  policyVersion String
+  ip            String?
+  userAgent     String?
+  createdAt     DateTime @default(now())
+}
+
+model QuizResult {
+  id         String   @id @default(cuid())
+  forWhom    String
+  universe   String?
+  timeBudget String?
+  email      String?
+  createdAt  DateTime @default(now())
+}
