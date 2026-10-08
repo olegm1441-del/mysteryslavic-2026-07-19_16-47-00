@@ -6,7 +6,8 @@
 - `out/Akulchev_karta_riska_avtomatiki_pilot.pdf` — PDF-копия
 - `SOURCES.md` — список источников со ссылками
 - `FACTS-vs-METHOD.md` — что подтверждено фактами о «Акульчев», а что является предлагаемой методикой
-- `images/README.md` — какая картинка на какой слайд
+- `images/README.md` — какая картинка на какой слайд и как добавить оставшиеся
+- `prepare_images.py` — подготовка кадров и иконок из `images/source/`
 
 ## Структура
 
@@ -41,8 +42,11 @@ https://fonts.google.com/specimen/Montserrat
 ```bash
 npm install pptxgenjs
 export PPTX_SKILL=<путь к pptx-скиллу>        # нужен только для applyTheme
+python3 prepare_images.py                      # кадры и иконки из images/source/
 node build_deck.js
 ```
+
+Сборка печатает, сколько кадров подставлено и каких ещё не хватает.
 
 Темой, палитрой и геометрией управляют объекты `THEME`, `HEX` и константы `SW/SH/M/BODY_TOP`
 в начале `build_deck.js`. Акцентный цвет меняется в одном месте — `THEME.colors.accent1`

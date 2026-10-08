@@ -121,22 +121,31 @@ pres.defineSlideMaster({
 });
 
 /* ------------------------------------------------------- изображения/заглушки */
-// слайд -> { файл, описание кадра для плейсхолдера }
+// слайд -> { базовое имя файла, описание кадра для плейсхолдера }
+// Расширение не фиксируем: подходит и .jpg, и .png (см. resolveImage).
 const IMG_MAP = {
-  s1: { file: "01-title.png",     note: "IMAGE 01 · 16:9\nЦех, открытый шкаф автоматики,\nинженер сбоку. Свободное поле слева." },
-  s2: { file: "07-line-wide.png", note: "IMAGE 07 · 16:9\nШирокий вид действующей\nкондитерской линии." },
-  s3: { file: "02-components.png",note: "IMAGE 02 · 4:3\nКомпоненты автоматики\nна инженерном столе." },
-  s4: { file: "03-fieldwork.png", note: "IMAGE 03 · 16:9\nСбор данных на линии:\nфото шильдика, осмотр шкафа." },
-  s5: { file: "04-lifecycle.png", note: "IMAGE 04 · 16:9\nРяд модулей от нового\nк старому поколению." },
-  s7: { file: "05-dashboard.png", note: "IMAGE 05 · 16:9\nИнженер у монитора\nс картой риска." },
-  s9: { file: "06-spare-repair.png", note: "IMAGE 06 · 4:3\nЗапас / ремонтный стенд /\nновый модуль замены." },
+  s1: { base: "01-title",       note: "IMAGE 01 · 16:9\nЦех, открытый шкаф автоматики,\nинженер сбоку. Свободное поле слева." },
+  s2: { base: "07-line-wide",   note: "IMAGE 07 · 16:9\nШирокий вид действующей\nкондитерской линии." },
+  s3: { base: "02-components",  note: "IMAGE 02 · 4:3\nКомпоненты автоматики\nна инженерном столе." },
+  s4: { base: "03-fieldwork",   note: "IMAGE 03 · 16:9\nСбор данных на линии:\nфото шильдика, осмотр шкафа." },
+  s5: { base: "04-lifecycle",   note: "IMAGE 04 · 16:9\nРяд модулей от нового\nк старому поколению." },
+  s7: { base: "05-dashboard",   note: "IMAGE 05 · 16:9\nИнженер у монитора\nс картой риска." },
+  s9: { base: "06-spare-repair",note: "IMAGE 06 · 4:3\nЗапас / ремонтный стенд /\nновый модуль замены." },
 };
+
+const EXTS = [".jpg", ".jpeg", ".png"];
+function resolveImage(base) {
+  for (const ext of EXTS) {
+    const p = path.join(IMG_DIR, base + ext);
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
+}
 
 function placeImage(slide, key, x, y, w, h, onDark) {
   const spec = IMG_MAP[key];
-  const file = path.join(IMG_DIR, spec.file);
-  const found = fs.existsSync(file);
-  if (found) {
+  const file = resolveImage(spec.base);
+  if (file) {
     slide.addImage({ path: file, x, y, w, h, sizing: { type: "cover", w, h },
                      objectName: "photo-" + key });
     return;
@@ -162,6 +171,16 @@ function badge(slide, label, x, y, d, fill, textColor, size) {
   slide.addText(label, { x, y, w: d, h: d, isTextBox: true, margin: 0,
     fontFace: FONT.head, fontSize: size || 13, bold: true, color: textColor || HEX.white,
     align: "center", valign: "middle" });
+}
+
+// Маркер компонента на слайде 3: готовая иконка, иначе буквенный кружок
+function compMark(slide, label, iconFile, x, y, d) {
+  const p = path.join(IMG_DIR, "icons", iconFile);
+  if (fs.existsSync(p)) {
+    slide.addImage({ path: p, x, y, w: d, h: d, objectName: "icon-" + label });
+  } else {
+    badge(slide, label, x, y, d, HEX.steel, HEX.white, label.length > 3 ? 7.5 : 9.5);
+  }
 }
 
 function card(slide, x, y, w, h, onDark) {
@@ -289,20 +308,20 @@ pres.addSection({ title: "Что и как проверяем" });
   s.addText("Что именно проверяется", { placeholder: "title" });
 
   const COMPS = [
-    ["ПЛК", "Программируемый контроллер", "выполняет логику участка"],
-    ["HMI", "Панель оператора", "режимы, ошибки, рецептуры"],
-    ["VFD", "Частотный преобразователь", "скорость конвейеров и насосов"],
-    ["SERVO", "Сервопривод и серводрайв", "точная подача, резка, упаковка"],
-    ["I/O", "Модули ввода-вывода", "сигналы датчиков и команды"],
-    ["IPC", "Промышленный ПК", "визуализация, архивы, рецептуры"],
+    ["ПЛК", "Программируемый контроллер", "выполняет логику участка", "plc.png"],
+    ["HMI", "Панель оператора", "режимы, ошибки, рецептуры", "hmi.png"],
+    ["VFD", "Частотный преобразователь", "скорость конвейеров и насосов", "vfd.png"],
+    ["SERVO", "Сервопривод и серводрайв", "точная подача, резка, упаковка", "servo.png"],
+    ["I/O", "Модули ввода-вывода", "сигналы датчиков и команды", "io.png"],
+    ["IPC", "Промышленный ПК", "визуализация, архивы, рецептуры", "ipc.png"],
   ];
   const gx = M, gy = BODY_TOP, cw = 2.78, ch = 1.26, gap = 0.16;
   COMPS.forEach((c, i) => {
     const col = i % 3, row = Math.floor(i / 3);
     const x = gx + col * (cw + gap), y = gy + row * (ch + gap);
     card(s, x, y, cw, ch);
-    badge(s, c[0], x + 0.18, y + 0.19, 0.46, HEX.steel, HEX.white, c[0].length > 3 ? 7.5 : 9.5);
-    s.addText(c[1], { x: x + 0.74, y: y + 0.19, w: cw - 0.92, h: 0.44, isTextBox: true, margin: 0,
+    compMark(s, c[0], c[3], x + 0.16, y + 0.16, 0.50);
+    s.addText(c[1], { x: x + 0.76, y: y + 0.19, w: cw - 0.94, h: 0.44, isTextBox: true, margin: 0,
       fontFace: FONT.head, fontSize: 10.5, bold: true, color: C.text1, align: "left", valign: "middle",
       lineSpacingMultiple: 1.05 });
     s.addText(c[2], { x: x + 0.18, y: y + 0.70, w: cw - 0.36, h: 0.36, isTextBox: true, margin: 0,
@@ -828,9 +847,12 @@ pres.addSection({ title: "Приложение" });
 (async () => {
   await pres.writeFile({ fileName: OUT });
   await applyTheme(OUT, THEME);
-  const missing = Object.values(IMG_MAP).filter((v) => !fs.existsSync(path.join(IMG_DIR, v.file)));
+  const missing = Object.values(IMG_MAP).filter((v) => !resolveImage(v.base));
+  const total = Object.keys(IMG_MAP).length;
   console.log("Собрано: " + OUT);
-  console.log("Изображений подставлено: " +
-    (Object.keys(IMG_MAP).length - missing.length) + " из " + Object.keys(IMG_MAP).length);
-  if (missing.length) console.log("Ожидаются файлы: " + missing.map((m) => m.file).join(", "));
+  console.log("Фото подставлено: " + (total - missing.length) + " из " + total);
+  if (missing.length) console.log("Ожидаются кадры: " + missing.map((m) => m.base).join(", "));
+  const icons = ["plc", "hmi", "vfd", "servo", "io", "ipc"]
+    .filter((i) => fs.existsSync(path.join(IMG_DIR, "icons", i + ".png")));
+  console.log("Иконок компонентов подставлено: " + icons.length + " из 6");
 })();
